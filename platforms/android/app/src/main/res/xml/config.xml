@@ -4,12 +4,12 @@
         <param name="android-package" value="org.apache.cordova.whitelist.WhitelistPlugin" />
         <param name="onload" value="true" />
     </feature>
-    <name>HelloCordova</name>
+    <name>EOSMsg</name>
     <description>
-        A sample Apache Cordova application that responds to the deviceready event.
+        Simple messenger using eos network.
     </description>
-    <author email="dev@cordova.apache.org" href="http://cordova.io">
-        Apache Cordova Team
+    <author email="trumae@gmail.com" href="http://eos.place">
+        EOS Place Team
     </author>
     <content src="index.html" />
     <access origin="*" />

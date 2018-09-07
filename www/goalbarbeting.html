@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<title>GoalBarClub - Simple Game</title>
+		<!-- <link rel="shortcut icon" href="favicon.ico"> -->
+
+		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+
+
+	</head>
+
+	<body>
+
+		<div class="container-fluid">
+			<br/>
+
+      <h3>My Balance: <span id="mybalance">0.0000 EOS</span></h3>
+
+			<!-- Claim regawards -->
+			<div class="row"  id="divclaim" style="display:none;">
+				<div class="col-10 offset-1">
+					<div class="jumbotron">
+						<h3>Balance to claim: <span id="toclaim">2.0000 EOS</span></h3>
+						<center><a class="btn btn-primary btn-lg" href="javascript:claim();" role="button">Claim</a></center>
+					</div>
+				</div>
+			</div>
+
+			<!-- Open games regawards -->
+			<div class="row"  id="listgames">
+				<div class="col-12">
+					<h3>Games open to bet</h3>
+					<div class="row" id="listgames">
+					</div>
+				</div>
+			</div>
+
+		</div>
+
+		<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
+		<script src="https://cdn.jsdelivr.net/npm/eosjs@16.0.0/lib/eos.min.js" integrity="sha512-vNyLnOEb7uFmEtVbLnyZQ9/k4zckM2Vu3jJOKq6XfWEVZG0yKcjDExVN4EQ7e3F+rePWRncMolI2xFi/3qo62A==" crossorigin="anonymous"></script>
+		<script src="eosmsg.js"></script>
+
+	</body>
+
+	<script>
+$(document).ready(function() {
+	initGameList();
+  updatePanels();
+});
+	</script>
+
+
+	<script>
+//// EOS ////////////
+var {
+	format,
+	api,
+	ecc,
+	json,
+	Fcbuffer
+} = Eos.modules;
+
+eosconfig = {
+	httpEndpoint: getEOSHttpEndpoint(),
+	chainId:  getEOSChainID(),
+	broadcast: true,
+	verbose: false,
+};
+
+var contract_account = "ctgbarbeting";
+eos = Eos(eosconfig);
+
+function initGameList() {
+	eos.getTableRows({
+		"json": true,
+		"scope": contract_account,
+		"code": contract_account,
+		"table": "game",
+		"limit": 100,
+	}).then(result => {
+		console.log(result);
+
+		for (var i in result.rows) {
+			var g = result.rows[i];
+			var Min = g.value_min.substring(0, g.value_min.length - 3) * 10000;
+			var Max = g.value_max.substring(0, g.value_max.length - 3) * 10000;
+			var Step = (Max - Min) / 20;
+
+			$("#listgames").append("<div class='col-12'><div class='card text-center' style='margin-bottom: 10px;'>" +
+					"   <div class='card-header'>" +
+					"      "+g.team1+ " X " + g.team2 +
+					"   </div> "+
+					"   <div class='card-body'>"+
+					"      <h5 class='card-title'>" + g.description + " (" + g.fee + " %) </h5>"+
+					" <div id='tobet" + i + "'>"+
+					"	   <p class='card-text'><b>Min:</b> " + g.value_min + " <b>Max:</b> " + g.value_max + "</p>"+
+					"       <label for='amount"+ i +"'>Amount: <span id='valbet" + i + "'>" + Min / 10000 + "</span> EOS</label>"+
+					"       <input type='range' class='custom-range' min='" + Min +"' max='" + Max+ "' step='" + Step + "' id='amount" + i + "' value='" + Min + "'" + 
+					" onchange='var v = $(\"\#amount\" + " + i + ").val(); $(\"\#valbet\" + " + i + ").html(v/10000); " +
+					"'>"+
+					"  <p> "+g.team1+ " <input type='number' value='0' id='oscore" + g.id + "'>  X <input type='number' value='0' id='tscore" + g.id + "'> " + g.team2 + "</p>" +
+
+					"<a class='btn btn-primary btn-lg' href='javascript:bet(" + g.id + ");' role='button' >Bet</a> " +
+
+					" </div>" +
+					"   </div> "+
+					"   <div class='card-footer text-muted'> "+
+					"	  Bets until: " + g.bet_until+
+					"    </div>"+
+					"</div></div>" );
+
+		}
+		hideJustBetGame();
+	}).catch(function(exception) {
+		if (exception) {
+			alert(exception);
+		}
+	});
+}
+
+function bet(idgame) {
+	var amount = format.DecimalUnimply($("#valbet" + idgame).html() * 10000, 4) + " EOS";
+	var sc1 = $("#oscore"+idgame).val();
+	var sc2 = $("#tscore"+idgame).val();
+
+	transfer("ctgbarbeting", amount, "" + idgame + "," + sc1 + "," + sc2)
+		.then(result => {
+			console.log(result);
+			hideJustBetGame();
+		})
+		.catch(exception => {
+			alert("Transfer error");
+		});
+}
+
+function hideJustBetGame() {
+	var p = getCurrentAccount();
+	eos.getTableRows({
+		"json": true,
+		"scope": contract_account,
+		"code": contract_account,
+		"table": "bet",
+		"limit": 10000,
+
+		//"key_type": "name",
+		//"index_position": 2,
+		//"lower_bound": p,
+	}).then(result => {
+		console.log("BETS");
+		console.log(result);
+
+		for (var i in result.rows) {
+			var bet = result.rows[i];
+			if (p != bet.player)
+				continue;
+
+			$("#tobet" + bet.idgame).html(
+					"<p><b>Bet at: </b>" + bet.created_at + "</p>" +
+					"<p><b>Amount: " + bet.value + "</p>" +
+					"<p><h3>" + bet.score1 + "X" + bet.score2 + "</h3></p>");
+		}
+
+		adjustIFrameHeigth(document.body.scrollHeight);
+	        setTimeout(hideJustBetGame, 5000);
+	}).catch(function(exception) {
+		if (exception) {
+			alert(exception);
+		}
+	        setTimeout(hideJustBetGame, 5000);
+	});
+
+}
+
+function updatePanels() {
+	var p = getCurrentAccount();
+
+  eos.getCurrencyBalance("eosio.token", p)
+    .then(result => {
+      console.log(result);
+      $("#mybalance").html(result[0]);
+    });
+
+	eos.getTableRows({
+		"json": true,
+		"scope": contract_account,
+		"code": contract_account,
+		"table": "player",
+		"limit": 10,
+		"lower_bound": p,
+	}).then(result => {
+		console.log("CLAIM");
+		console.log(result);
+
+		if (result.rows.length == 0) {
+			$("#divclaim").hide();
+		} else {
+			$("#toclaim").html(result.rows[0].eos_balance);
+			$("#divclaim").show();
+		}
+
+    setTimeout(updatePanels, 5000);
+	}).catch(function(exception) {
+		if (exception) {
+			alert(exception);
+		}
+    setTimeout(updatePanels, 5000);
+	});
+
+}
+
+function claim() {
+  console.log("claim");
+
+  var p = getCurrentAccount();
+  signAndPush({
+        account: 'ctgbarbeting',
+        name: 'claim',
+        authorization: [{
+          actor: p,
+          permission: 'active'
+        }],
+        data: { name: p }
+      })
+		.then(result => {
+			console.log(result);
+      updatePanels();
+			hideJustBetGame();
+		})
+		.catch(exception => {
+			alert("Claim error");
+		});
+}
+
+	</script>
+
+</html>
